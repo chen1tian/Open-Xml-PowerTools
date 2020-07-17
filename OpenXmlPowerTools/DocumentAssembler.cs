@@ -431,6 +431,19 @@ namespace OpenXmlPowerTools
             return node;
         }
 
+        private class s_TableGroupType
+        {
+            public static string Group = "<Group>";
+            public static string Sum = "<Sum>";
+        }
+
+        private class TableGroupCfg
+        {
+            public int ColIndex { get; set; }
+
+            public string GroupType { get; set; }
+        }
+
         private static XElement TransformXmlTextToMetadata(TemplateError te, string xmlText)
         {
             XElement xml;
@@ -593,6 +606,10 @@ namespace OpenXmlPowerTools
             public bool HasError = false;
         }
 
+        private static List<string> s_tabGrpCfgs = new List<string>() {
+            "<Group>",
+            "<Sum>"
+        };
         static object ContentReplacementTransform(XNode node, XElement data, TemplateError templateError)
         {
             XElement element = node as XElement;
@@ -718,6 +735,27 @@ namespace OpenXmlPowerTools
                         return CreateContextErrorMessage(element, string.Format("Table does not contain a prototype row"), templateError);
                     protoRow.Descendants(W.bookmarkStart).Remove();
                     protoRow.Descendants(W.bookmarkEnd).Remove();
+
+                    // Get Last Row Cell Text
+                    var tableGroupCfgs = new List<TableGroupCfg>();
+                    var lastRow = table.Elements(W.tr).Last();
+
+                    foreach (var tc in lastRow.Elements(W.tc))
+                    {
+                        var runs = tc.Descendants(W.r);
+                        var texts = runs.SelectMany(x => x.Elements(W.t))
+                            .Select(x => x.Value).ToList();
+                        var text = string.Join("", texts);
+
+                        if (s_tabGrpCfgs.Contains(text))
+                        {
+                            var colIndex = tc.ElementsBeforeSelf().Count() - 1;
+                            var tblGpCfg = new TableGroupCfg() { ColIndex = colIndex, GroupType = text };
+                            tableGroupCfgs.Add(tblGpCfg);
+                        }
+                    }
+                    lastRow.Remove();
+
                     XElement newTable = new XElement(W.tbl,
                         table.Elements().Where(e => e.Name != W.tr),
                         table.Elements(W.tr).Take(headerRowCount),
@@ -756,6 +794,38 @@ namespace OpenXmlPowerTools
                                     }))),
                                     footerRows
                                     );
+
+                    var groupRows = newTable.Elements(W.tr).Skip(headerRowCount).ToList();
+                    var groupCfgs = tableGroupCfgs.Where(x => x.GroupType == s_TableGroupType.Group);
+
+                    var groupRowCount = 0;
+                    var preRowIndex = 0;
+                    string preTcText = null;
+
+                    foreach (var row in groupRows)
+                    {                        
+                        var tcList = row.Descendants(W.tc);
+
+                        foreach (var cfg in groupCfgs)
+                        {
+                            var tc = tcList.ElementAt(cfg.ColIndex);
+                            var text = tc.Element(W.p).Element(W.r).Element(W.t).Value;
+
+                            if (preTcText != text)
+                            {
+                                preTcText = text;
+
+                                if (groupRowCount >= 1)
+                                { 
+                                    // 
+                                }
+
+                                preRowIndex = groupRows.IndexOf(row);
+                                groupRowCount = 1;
+                            }
+                        }
+                    }
+
                     return newTable;
                 }
                 if (element.Name == PA.Conditional)

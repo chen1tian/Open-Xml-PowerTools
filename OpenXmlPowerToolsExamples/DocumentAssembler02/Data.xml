@@ -22,7 +22,7 @@
       <MaxCount>10</MaxCount>
     </Item>
     <Item>
-      <Name>Items2</Name>
+      <Name>Items1</Name>
       <MinCount>2</MinCount>
       <MaxCount>15</MaxCount>
     </Item>
